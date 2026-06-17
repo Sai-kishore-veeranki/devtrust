@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: devtrust
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: devtrust-correlation-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.vsk.devtrust.model"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+devtrust:
+  kafka:
+    topics:
+      deployments: devtrust.deployments
+      anomalies: devtrust.anomalies
+      incidents: devtrust.incidents
+  correlation:
+    window-seconds: 300   # correlate anomalies within 5 minutes of a deployment
