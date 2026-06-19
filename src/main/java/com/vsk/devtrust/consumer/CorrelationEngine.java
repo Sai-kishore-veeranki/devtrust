@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -26,6 +27,7 @@ public class CorrelationEngine {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, DeploymentEvent> deploymentRedisTemplate;
     private final IncidentRepository incidentRepository;
+    private final SimpMessagingTemplate messagingTemplate;   // NEW
 
     @Value("${devtrust.kafka.topics.incidents}")
     private String incidentsTopic;
@@ -43,7 +45,6 @@ public class CorrelationEngine {
         log.info("Deployment received: service={} commit={} author={}",
                 event.getServiceName(), event.getCommitId(), event.getAuthor());
 
-        // Store in Redis with TTL equal to the correlation window
         String key = REDIS_KEY_PREFIX + event.getServiceName();
         deploymentRedisTemplate.opsForValue()
                 .set(key, event, correlationWindowSeconds, TimeUnit.SECONDS);
@@ -79,10 +80,8 @@ public class CorrelationEngine {
                 .detectedAt(Instant.now())
                 .build();
 
-        // 1. Emit to Kafka
         kafkaTemplate.send(incidentsTopic, anomaly.getServiceName(), incident);
 
-        // 2. Persist to PostgreSQL
         IncidentEntity entity = IncidentEntity.builder()
                 .incidentId(incident.getIncidentId())
                 .serviceName(anomaly.getServiceName())
@@ -98,6 +97,9 @@ public class CorrelationEngine {
                 .build();
 
         incidentRepository.save(entity);
+
+        // NEW — push live to any subscribed React client
+        messagingTemplate.convertAndSend("/topic/incidents", entity);
 
         log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}%",
                 anomaly.getServiceName(), recentDeploy.getCommitId(), recentDeploy.getAuthor(),
