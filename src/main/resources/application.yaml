@@ -37,6 +37,8 @@ spring:
         format_sql: true
 
 devtrust:
+  github:
+    webhook-secret: devtrust-secret-9f7347
   kafka:
     topics:
       deployments: devtrust.deployments
