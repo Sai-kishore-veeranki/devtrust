@@ -36,7 +36,23 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: devtrust
+
 devtrust:
+
+  prometheus:
+    url: http://localhost:9090
+    service-name: devtrust-test-repo  # must match your GitHub repo name for correlation to work
   github:
     webhook-secret: devtrust-secret-9f7347
   kafka:
