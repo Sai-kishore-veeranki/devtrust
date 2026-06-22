@@ -23,6 +23,9 @@ public class IncidentEntity {
     @Column(unique = true)
     private String incidentId;
 
+    @Column(columnDefinition = "TEXT")
+    private String rootCauseAnalysis;
+
     private String serviceName;
     private String commitId;
     private String author;

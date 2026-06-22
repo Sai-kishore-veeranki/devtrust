@@ -50,6 +50,11 @@ management:
 
 devtrust:
 
+  ai:
+    api-key: ${GROQ_API_KEY}
+    api-url: https://api.groq.com/openai/v1/chat/completions
+    model: llama-3.3-70b-versatile
+
   prometheus:
     url: http://localhost:9090
     service-name: devtrust-test-repo  # must match your GitHub repo name for correlation to work
