@@ -1,5 +1,6 @@
 package com.vsk.devtrust.consumer;
 
+import com.vsk.devtrust.ai.RootCauseAnalysisService;
 import com.vsk.devtrust.entity.IncidentEntity;
 import com.vsk.devtrust.model.AnomalyEvent;
 import com.vsk.devtrust.model.CorrelatedIncident;
@@ -27,7 +28,8 @@ public class CorrelationEngine {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, DeploymentEvent> deploymentRedisTemplate;
     private final IncidentRepository incidentRepository;
-    private final SimpMessagingTemplate messagingTemplate;   // NEW
+    private final SimpMessagingTemplate messagingTemplate;
+    private final RootCauseAnalysisService rootCauseAnalysisService;
 
     @Value("${devtrust.kafka.topics.incidents}")
     private String incidentsTopic;
@@ -96,15 +98,24 @@ public class CorrelationEngine {
                 .detectedAt(incident.getDetectedAt())
                 .build();
 
-        incidentRepository.save(entity);
+        IncidentEntity savedEntity = incidentRepository.save(entity);
 
-        // NEW — push live to any subscribed React client
-        messagingTemplate.convertAndSend("/topic/incidents", entity);
+        // Broadcast immediately so the card appears right away, before AI finishes
+        messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
 
         log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}%",
                 anomaly.getServiceName(), recentDeploy.getCommitId(), recentDeploy.getAuthor(),
                 anomaly.getMetricName(), anomaly.getSeverity(), deltaSeconds,
                 Math.round(confidence * 100));
+
+        // Generate AI root cause, then save + broadcast the update
+        String rootCause = rootCauseAnalysisService.generateRootCause(savedEntity);
+        savedEntity.setRootCauseAnalysis(rootCause);
+        incidentRepository.save(savedEntity);
+
+        messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
+
+        log.info("AI root cause generated for incident [{}]: {}", savedEntity.getIncidentId(), rootCause);
     }
 
     private double computeConfidence(long deltaSeconds, String severity) {

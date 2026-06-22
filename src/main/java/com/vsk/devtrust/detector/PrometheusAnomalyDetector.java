@@ -36,9 +36,8 @@ public class PrometheusAnomalyDetector {
     // Checks real HTTP request latency every 15 seconds
     @Scheduled(fixedDelay = 15_000, initialDelay = 5_000)
     public void checkHttpLatency() {
-        // Average request duration over the last 1 minute, in seconds
-        String query = "rate(http_server_requests_seconds_sum[1m]) / rate(http_server_requests_seconds_count[1m])";
-        checkMetric(query, "avg_response_time_ms", 200.0, value -> value * 1000); // convert to ms
+        String query = "sum(rate(http_server_requests_seconds_sum[2m])) / sum(rate(http_server_requests_seconds_count[2m]))";
+        checkMetric(query, "avg_response_time_ms", 200.0, value -> value * 1000);
     }
 
     // Checks JVM heap memory usage every 15 seconds
