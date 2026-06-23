@@ -47,9 +47,14 @@ public class CorrelationEngine {
         log.info("Deployment received: service={} commit={} author={}",
                 event.getServiceName(), event.getCommitId(), event.getAuthor());
 
-        String key = REDIS_KEY_PREFIX + event.getServiceName();
-        deploymentRedisTemplate.opsForValue()
-                .set(key, event, correlationWindowSeconds, TimeUnit.SECONDS);
+        try {
+            String key = REDIS_KEY_PREFIX + event.getServiceName();
+            deploymentRedisTemplate.opsForValue()
+                    .set(key, event, correlationWindowSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("Failed to store deployment in Redis for service [{}] — correlation may be missed",
+                    event.getServiceName(), e);
+        }
     }
 
     @KafkaListener(
@@ -60,8 +65,15 @@ public class CorrelationEngine {
         log.info("Anomaly received: service={} metric={} severity={}",
                 anomaly.getServiceName(), anomaly.getMetricName(), anomaly.getSeverity());
 
-        String key = REDIS_KEY_PREFIX + anomaly.getServiceName();
-        DeploymentEvent recentDeploy = deploymentRedisTemplate.opsForValue().get(key);
+        DeploymentEvent recentDeploy;
+        try {
+            String key = REDIS_KEY_PREFIX + anomaly.getServiceName();
+            recentDeploy = deploymentRedisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to query Redis for service [{}] — skipping correlation",
+                    anomaly.getServiceName(), e);
+            return;
+        }
 
         if (recentDeploy == null) {
             log.debug("No recent deployment in window for service [{}]", anomaly.getServiceName());
