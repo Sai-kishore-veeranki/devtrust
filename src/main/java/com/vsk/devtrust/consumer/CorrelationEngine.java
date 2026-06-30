@@ -80,6 +80,13 @@ public class CorrelationEngine {
             return;
         }
 
+        String correlationKey = recentDeploy.getCommitId() + ":" + anomaly.getAnomalyId();
+
+        if (incidentRepository.existsByCorrelationKey(correlationKey)) {
+            log.info("Duplicate correlation detected for key [{}] — skipping (likely Kafka redelivery)", correlationKey);
+            return;
+        }
+
         long deltaSeconds = anomaly.getTimestamp().getEpochSecond()
                 - recentDeploy.getTimestamp().getEpochSecond();
 
@@ -98,6 +105,7 @@ public class CorrelationEngine {
 
         IncidentEntity entity = IncidentEntity.builder()
                 .incidentId(incident.getIncidentId())
+                .correlationKey(correlationKey)
                 .serviceName(anomaly.getServiceName())
                 .commitId(recentDeploy.getCommitId())
                 .author(recentDeploy.getAuthor())
@@ -110,9 +118,14 @@ public class CorrelationEngine {
                 .detectedAt(incident.getDetectedAt())
                 .build();
 
-        IncidentEntity savedEntity = incidentRepository.save(entity);
+        IncidentEntity savedEntity;
+        try {
+            savedEntity = incidentRepository.save(entity);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("Race condition: duplicate correlation key [{}] caught at database level — skipping", correlationKey);
+            return;
+        }
 
-        // Broadcast immediately so the card appears right away, before AI finishes
         messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
 
         log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}%",
@@ -120,7 +133,6 @@ public class CorrelationEngine {
                 anomaly.getMetricName(), anomaly.getSeverity(), deltaSeconds,
                 Math.round(confidence * 100));
 
-        // Generate AI root cause, then save + broadcast the update
         String rootCause = rootCauseAnalysisService.generateRootCause(savedEntity);
         savedEntity.setRootCauseAnalysis(rootCause);
         incidentRepository.save(savedEntity);

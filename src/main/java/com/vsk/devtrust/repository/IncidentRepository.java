@@ -9,6 +9,6 @@ import java.util.List;
 @Repository
 public interface IncidentRepository extends JpaRepository<IncidentEntity, Long> {
     List<IncidentEntity> findByServiceNameOrderByDetectedAtDesc(String serviceName);
-
     List<IncidentEntity> findTop20ByOrderByDetectedAtDesc();
+    boolean existsByCorrelationKey(String correlationKey);
 }

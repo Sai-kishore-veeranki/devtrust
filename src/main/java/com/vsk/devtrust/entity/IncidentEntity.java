@@ -36,4 +36,7 @@ public class IncidentEntity {
     private long deltaSeconds;
     private double confidenceScore;
     private Instant detectedAt;
+
+    @Column(unique = true)
+    private String correlationKey;
 }
