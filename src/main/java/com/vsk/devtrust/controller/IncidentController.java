@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -36,5 +37,19 @@ public class IncidentController {
     public ResponseEntity<List<IncidentEntity>> getByService(@PathVariable String serviceName) {
         return ResponseEntity.ok(
                 incidentRepository.findByServiceNameOrderByDetectedAtDesc(serviceName));
+    }
+
+
+    @PatchMapping("/{incidentId}/resolve")
+    public ResponseEntity<IncidentEntity> resolveIncident(@PathVariable String incidentId) {
+        return incidentRepository.findAll().stream()
+                .filter(i -> i.getIncidentId().equals(incidentId))
+                .findFirst()
+                .map(incident -> {
+                    incident.setStatus("RESOLVED");
+                    incident.setResolvedAt(Instant.now());
+                    return ResponseEntity.ok(incidentRepository.save(incident));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }
