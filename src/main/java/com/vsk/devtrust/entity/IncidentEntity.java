@@ -39,4 +39,11 @@ public class IncidentEntity {
 
     @Column(unique = true)
     private String correlationKey;
+
+    @Column
+    private Instant resolvedAt;
+
+    @Column
+    @Builder.Default
+    private String status = "OPEN";
 }
