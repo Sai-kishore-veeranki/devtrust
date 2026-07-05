@@ -50,20 +50,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  devtrust-app:
-    build: .
-    ports:
-      - "8080:8080"
-    depends_on:
-      - kafka
-      - redis
-      - postgres
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devtrust
-      GROQ_API_KEY: ${GROQ_API_KEY:test-api-key}
-      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:test-webhook-secret}
+#  devtrust-app:
+#    build: .
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      - kafka
+#      - redis
+#      - postgres
+#    environment:
+#      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+#      SPRING_DATA_REDIS_HOST: redis
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devtrust
+#      GROQ_API_KEY: ${GROQ_API_KEY:test-api-key}
+#      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:test-webhook-secret}
 
 volumes:
   redis-data:

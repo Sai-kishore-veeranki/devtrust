@@ -46,4 +46,13 @@ public class IncidentEntity {
     @Column
     @Builder.Default
     private String status = "OPEN";
+
+
+    private Double estimatedRevenueLost;
+    private Double estimatedUsersAffected;
+    private Long durationMinutes;
+    private Boolean slaBreached;
+
+    @Column(columnDefinition = "TEXT")
+    private String costSummary;
 }
