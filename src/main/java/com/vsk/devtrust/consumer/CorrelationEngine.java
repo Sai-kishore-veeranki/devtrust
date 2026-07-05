@@ -3,9 +3,11 @@ package com.vsk.devtrust.consumer;
 import com.vsk.devtrust.ai.RootCauseAnalysisService;
 import com.vsk.devtrust.entity.IncidentEntity;
 import com.vsk.devtrust.model.AnomalyEvent;
+import com.vsk.devtrust.model.BlastRadius;
 import com.vsk.devtrust.model.CorrelatedIncident;
 import com.vsk.devtrust.model.DeploymentEvent;
 import com.vsk.devtrust.repository.IncidentRepository;
+import com.vsk.devtrust.service.BlastRadiusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +32,7 @@ public class CorrelationEngine {
     private final IncidentRepository incidentRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RootCauseAnalysisService rootCauseAnalysisService;
+    private final BlastRadiusService blastRadiusService;
 
     @Value("${devtrust.kafka.topics.incidents}")
     private String incidentsTopic;
@@ -83,7 +86,7 @@ public class CorrelationEngine {
         String correlationKey = recentDeploy.getCommitId() + ":" + anomaly.getAnomalyId();
 
         if (incidentRepository.existsByCorrelationKey(correlationKey)) {
-            log.info("Duplicate correlation detected for key [{}] — skipping (likely Kafka redelivery)", correlationKey);
+            log.info("Duplicate correlation detected for key [{}] — skipping", correlationKey);
             return;
         }
 
@@ -122,17 +125,29 @@ public class CorrelationEngine {
         try {
             savedEntity = incidentRepository.save(entity);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.info("Race condition: duplicate correlation key [{}] caught at database level — skipping", correlationKey);
+            log.info("Race condition: duplicate correlation key [{}] caught at db level — skipping", correlationKey);
             return;
         }
 
+        // Step 1 — Compute blast radius (fast, no external call) and broadcast immediately
+        BlastRadius blastRadius = blastRadiusService.compute(savedEntity, null);
+        savedEntity.setEstimatedRevenueLost(blastRadius.getEstimatedRevenueLost());
+        savedEntity.setEstimatedUsersAffected(blastRadius.getEstimatedUsersAffected());
+        savedEntity.setDurationMinutes(blastRadius.getDurationMinutes());
+        savedEntity.setSlaBreached(blastRadius.isSlaBreached());
+        savedEntity.setCostSummary(blastRadius.getCostSummary());
+        incidentRepository.save(savedEntity);
+
         messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
 
-        log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}%",
+        log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}% revenue_lost=${} sla_breached={}",
                 anomaly.getServiceName(), recentDeploy.getCommitId(), recentDeploy.getAuthor(),
                 anomaly.getMetricName(), anomaly.getSeverity(), deltaSeconds,
-                Math.round(confidence * 100));
+                Math.round(confidence * 100),
+                String.format("%.2f", blastRadius.getEstimatedRevenueLost()),
+                blastRadius.isSlaBreached());
 
+        // Step 2 — Generate AI root cause (slow, external API call) then broadcast final update
         String rootCause = rootCauseAnalysisService.generateRootCause(savedEntity);
         savedEntity.setRootCauseAnalysis(rootCause);
         incidentRepository.save(savedEntity);
