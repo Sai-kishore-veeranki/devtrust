@@ -8,6 +8,7 @@ import com.vsk.devtrust.model.CorrelatedIncident;
 import com.vsk.devtrust.model.DeploymentEvent;
 import com.vsk.devtrust.repository.IncidentRepository;
 import com.vsk.devtrust.service.BlastRadiusService;
+import com.vsk.devtrust.service.ServiceGraphService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,8 @@ public class CorrelationEngine {
     private final SimpMessagingTemplate messagingTemplate;
     private final RootCauseAnalysisService rootCauseAnalysisService;
     private final BlastRadiusService blastRadiusService;
+    private final ServiceGraphService serviceGraphService;
+
 
     @Value("${devtrust.kafka.topics.incidents}")
     private String incidentsTopic;
@@ -137,6 +140,9 @@ public class CorrelationEngine {
         savedEntity.setSlaBreached(blastRadius.isSlaBreached());
         savedEntity.setCostSummary(blastRadius.getCostSummary());
         incidentRepository.save(savedEntity);
+
+        // Auto-register / update the service node in the dependency graph
+        serviceGraphService.registerOrUpdateService(savedEntity);
 
         messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
 
