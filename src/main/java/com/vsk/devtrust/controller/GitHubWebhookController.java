@@ -35,7 +35,7 @@ public class GitHubWebhookController {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RiskScorerService riskScorerService;
     private final GitHubCommentService gitHubCommentService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Value("${devtrust.github.webhook-secret}")
     private String webhookSecret;

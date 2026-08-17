@@ -10,6 +10,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CorrelationEngineTest {
 
+    // NOTE: this file was out of sync with CorrelationEngine's constructor — it was
+    // calling `new CorrelationEngine(null, null, null, null, null)` (5 args) while the
+    // class had already grown to 7 (now 8, after adding deploymentLogRepository), which
+    // meant this test class did not compile. The surefire report in target/ that showed
+    // "6 passed, 0 failures" predates the newer constructor params and was stale.
+    // Fixed by matching the argument count to the current @RequiredArgsConstructor field
+    // order: kafkaTemplate, deploymentRedisTemplate, incidentRepository,
+    // deploymentLogRepository, messagingTemplate, rootCauseAnalysisService,
+    // blastRadiusService, serviceGraphService.
+
     // computeConfidence is private, so we test it via reflection
     // In a real refactor, you'd extract this into a separate, testable ConfidenceCalculator class
     private double invokeComputeConfidence(CorrelationEngine engine, long deltaSeconds, String severity) throws Exception {
@@ -20,7 +30,7 @@ class CorrelationEngineTest {
 
     @Test
     void criticalSeverityImmediatelyAfterDeploy_givesHighConfidence() throws Exception {
-        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null);
+        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null, null, null, null);
         setWindowSeconds(engine, 300);
 
         double confidence = invokeComputeConfidence(engine, 5, "CRITICAL");
@@ -30,7 +40,7 @@ class CorrelationEngineTest {
 
     @Test
     void lowSeverityNearEndOfWindow_givesLowConfidence() throws Exception {
-        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null);
+        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null, null, null, null);
         setWindowSeconds(engine, 300);
 
         double confidence = invokeComputeConfidence(engine, 290, "LOW");
@@ -46,7 +56,7 @@ class CorrelationEngineTest {
             "LOW, 0.3"
     })
     void severityScoreOrdering_isCorrect(String severity, double expectedSeverityWeight) throws Exception {
-        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null);
+        CorrelationEngine engine = new CorrelationEngine(null, null, null, null, null, null, null, null);
         setWindowSeconds(engine, 300);
 
         // At deltaSeconds = 0, timeScore = 1.0, so confidence = (1.0 * 0.6) + (severityWeight * 0.4)

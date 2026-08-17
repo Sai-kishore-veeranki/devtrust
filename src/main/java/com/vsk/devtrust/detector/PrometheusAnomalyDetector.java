@@ -13,14 +13,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PrometheusAnomalyDetector {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -32,6 +35,19 @@ public class PrometheusAnomalyDetector {
 
     @Value("${devtrust.prometheus.service-name}")
     private String serviceName;
+
+    @Value("${devtrust.detector.cooldown-seconds:300}")
+    private long cooldownSeconds;
+
+    // Ranks severities so a worsening breach can still re-alert mid-cooldown
+    private static final List<String> SEVERITY_ORDER = List.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
+
+    // Tracks the last time each metric fired, so a metric that stays above
+    // threshold for minutes doesn't create a new AnomalyEvent (and therefore a
+    // new incident row) on every 15-second scrape.
+    private final Map<String, LastAlert> lastAlertByMetric = new ConcurrentHashMap<>();
+
+    private record LastAlert(Instant firedAt, String severity) {}
 
     // Checks real HTTP request latency every 15 seconds
     @Scheduled(fixedDelay = 15_000, initialDelay = 5_000)
@@ -67,7 +83,12 @@ public class PrometheusAnomalyDetector {
             log.info("Metric check: {} = {} (threshold: {})", metricName, String.format("%.2f", value), threshold);
 
             if (value > threshold) {
-                publishAnomaly(metricName, value, threshold);
+                String severity = computeSeverity(value, threshold);
+                if (shouldAlert(metricName, severity)) {
+                    publishAnomaly(metricName, value, threshold, severity);
+                } else {
+                    log.debug("Metric [{}] still above threshold but within cooldown — suppressing duplicate anomaly", metricName);
+                }
             }
 
         } catch (Exception e) {
@@ -75,9 +96,28 @@ public class PrometheusAnomalyDetector {
         }
     }
 
-    private void publishAnomaly(String metricName, double value, double threshold) {
-        String severity = computeSeverity(value, threshold);
+    /**
+     * Fires at most once per cooldown window per metric, unless the breach has
+     * gotten worse since the last alert — a MEDIUM that escalates to CRITICAL
+     * mid-cooldown should still notify immediately.
+     */
+    private boolean shouldAlert(String metricName, String severity) {
+        LastAlert previous = lastAlertByMetric.get(metricName);
 
+        boolean cooldownElapsed = previous == null
+                || previous.firedAt().plusSeconds(cooldownSeconds).isBefore(Instant.now());
+        boolean severityEscalated = previous != null
+                && SEVERITY_ORDER.indexOf(severity) > SEVERITY_ORDER.indexOf(previous.severity());
+
+        if (!cooldownElapsed && !severityEscalated) {
+            return false;
+        }
+
+        lastAlertByMetric.put(metricName, new LastAlert(Instant.now(), severity));
+        return true;
+    }
+
+    private void publishAnomaly(String metricName, double value, double threshold, String severity) {
         AnomalyEvent event = AnomalyEvent.builder()
                 .anomalyId(UUID.randomUUID().toString())
                 .serviceName(serviceName)

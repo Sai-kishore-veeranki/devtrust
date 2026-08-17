@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface IncidentRepository extends JpaRepository<IncidentEntity, Long> {
@@ -14,4 +15,8 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, Long> 
     boolean existsByCorrelationKey(String correlationKey);
 
     List<IncidentEntity> findByDetectedAtAfterOrderByDetectedAtDesc(Instant since);
+
+    Optional<IncidentEntity> findByIncidentId(String incidentId);
+
+    long countByServiceNameAndDetectedAtAfter(String serviceName, Instant since);
 }

@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -21,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RootCauseAnalysisService {
 
-    private final RestTemplate restTemplate = createRestTemplateWithTimeout();
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${devtrust.ai.api-key}")
@@ -32,13 +31,6 @@ public class RootCauseAnalysisService {
 
     @Value("${devtrust.ai.model}")
     private String model;
-
-    private static RestTemplate createRestTemplateWithTimeout() {
-        var factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(10000);
-        return new RestTemplate(factory);
-    }
 
     public String generateRootCause(IncidentEntity incident) {
         try {

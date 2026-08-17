@@ -46,7 +46,10 @@ public class RiskScorerService {
         int keywordScore = computeKeywordScore(prTitle, explanation);
         score += keywordScore;
 
-        score = Math.min(score, 100);
+        // Signal 4 can subtract points for low-risk changes, so this needs a floor
+        // as well as a ceiling — without it a "docs" PR on a quiet service could
+        // score below zero and print a nonsensical negative risk score.
+        score = Math.max(0, Math.min(score, 100));
 
         String level = score >= 70 ? "HIGH" : score >= 40 ? "MEDIUM" : "LOW";
 
@@ -58,11 +61,12 @@ public class RiskScorerService {
 
     private int computeIncidentScore(String serviceName, StringBuilder explanation) {
         Instant thirtyDaysAgo = Instant.now().minus(30, ChronoUnit.DAYS);
+        // Was pulling every incident across every service in the last 30 days and
+        // filtering in Java — fine at demo scale, but it re-scans the whole window
+        // on every PR. Filtering by service in the query means each call only
+        // touches the rows that matter.
         long recentIncidents = incidentRepository
-                .findByDetectedAtAfterOrderByDetectedAtDesc(thirtyDaysAgo)
-                .stream()
-                .filter(i -> serviceName.equals(i.getServiceName()))
-                .count();
+                .countByServiceNameAndDetectedAtAfter(serviceName, thirtyDaysAgo);
 
         if (recentIncidents == 0) {
             explanation.append("No recent incidents for this service. ");

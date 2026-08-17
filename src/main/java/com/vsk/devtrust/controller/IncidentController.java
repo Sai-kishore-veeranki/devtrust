@@ -28,9 +28,7 @@ public class IncidentController {
     // GET /api/incidents/{id}
     @GetMapping("/{incidentId}")
     public ResponseEntity<IncidentEntity> getIncident(@PathVariable String incidentId) {
-        return incidentRepository.findAll().stream()
-                .filter(i -> i.getIncidentId().equals(incidentId))
-                .findFirst()
+        return incidentRepository.findByIncidentId(incidentId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -42,13 +40,9 @@ public class IncidentController {
                 incidentRepository.findByServiceNameOrderByDetectedAtDesc(serviceName));
     }
 
-
-
     @PatchMapping("/{incidentId}/resolve")
     public ResponseEntity<IncidentEntity> resolveIncident(@PathVariable String incidentId) {
-        return incidentRepository.findAll().stream()
-                .filter(i -> i.getIncidentId().equals(incidentId))
-                .findFirst()
+        return incidentRepository.findByIncidentId(incidentId)
                 .map(incident -> {
                     Instant resolvedAt = Instant.now();
                     incident.setStatus("RESOLVED");

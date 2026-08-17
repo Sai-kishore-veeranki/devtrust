@@ -255,11 +255,11 @@ Four signals contribute to the 0–100 risk score:
 devtrust/
 ├── src/main/java/com/vsk/devtrust/
 │   ├── ai/                    # Groq AI root cause analysis
-│   ├── config/                # Kafka, Redis, WebSocket, CORS, data seeding
+│   ├── config/                # Kafka, Redis, WebSocket, CORS, shared RestTemplate, data seeding
 │   ├── consumer/              # Kafka consumers (CorrelationEngine)
 │   ├── controller/            # REST controllers + GitHub webhook
 │   ├── detector/              # Prometheus anomaly detection
-│   ├── entity/                # JPA entities
+│   ├── entity/                # JPA entities (incidents, deployment log, service graph)
 │   ├── model/                 # Event models (DeploymentEvent, AnomalyEvent, etc.)
 │   ├── repository/            # Spring Data JPA repositories
 │   ├── service/               # Business logic (blast radius, risk scorer, graph, DORA)
@@ -271,7 +271,7 @@ devtrust/
 │       │   ├── IncidentFeed.jsx
 │       │   ├── DoraMetrics.jsx
 │       │   └── ServiceGraph.jsx
-│       └── services/          # API and WebSocket clients
+│       └── services/          # API client (single source of truth for the backend base URL) and WebSocket client
 ├── prometheus.yml             # Prometheus scrape config
 ├── docker-compose.yml         # Full stack local + production setup
 ├── Dockerfile                 # Multi-stage Spring Boot build
@@ -282,13 +282,31 @@ devtrust/
 
 ## Known Limitations and Future Work
 
-**Change failure rate accuracy:** The current DORA implementation only tracks deployments that caused incidents. A complete implementation would require a separate deployments table tracking all pushes regardless of outcome.
-
 **AI call blocking:** The Groq API call currently blocks the Kafka consumer thread (typically 1–3 seconds). At scale, this should move to an async queue with a separate consumer group.
 
 **Service dependency auto-discovery:** Dependencies are currently declared manually via the REST API or seeded on startup. A production-grade implementation would auto-discover them from service mesh telemetry (Istio, Consul) or distributed tracing (Jaeger, Zipkin).
 
 **Single-tenant:** The current data model has no tenant isolation. Multi-company use would require a `tenantId` threaded through all entities and Kafka message keys.
+
+**Service health doesn't self-heal:** `ServiceGraphService` only recomputes a node's health status when a *new* incident arrives. A service that goes CRITICAL and then has no further incidents stays CRITICAL indefinitely instead of decaying back to HEALTHY over time — would need a scheduled sweep, not just event-driven updates.
+
+**Schema migrations:** `ddl-auto: update` is convenient for a portfolio project but isn't how you'd run this in production — a real deployment would use Flyway or Liquibase for versioned, reviewable schema changes.
+
+---
+
+## Fixed Since Initial Build
+
+**Change failure rate always read 100%:** `DoraMetricsService` derived both the numerator and denominator of the change-failure-rate calculation from the same incidents list, so the rate was mathematically guaranteed to always equal 100% regardless of what actually happened. Fixed by adding `DeploymentLogEntity`, which logs every deployment DevTrust observes (not just the ones that later correlated with an incident), giving the metric a real denominator.
+
+**Anomaly detector could flood duplicate incidents:** `PrometheusAnomalyDetector` scrapes every 15 seconds with no cooldown, and each anomaly gets a fresh UUID — so a metric that stayed above threshold for several minutes created a new incident row on every single scrape instead of one incident per outage. Fixed with a per-metric cooldown window that still lets a worsening severity re-alert immediately.
+
+**Risk score could go negative:** Low-risk PR keywords subtract points with no floor, so a quiet service with a "docs" PR could score below zero. Added a lower bound alongside the existing upper bound.
+
+**N+1-style lookups on hot paths:** `IncidentController`'s single-incident and resolve endpoints, and `RiskScorerService`'s incident-history check, all pulled full table scans into memory and filtered in Java. Replaced with indexed repository queries (`findByIncidentId`, `countByServiceNameAndDetectedAtAfter`).
+
+**Unbounded HTTP calls:** `GitHubWebhookController`, `GitHubCommentService`, and `PrometheusAnomalyDetector` each created their own `new RestTemplate()` with no timeout, so a slow GitHub or Prometheus response could hang a webhook or scheduled thread indefinitely. Consolidated into one `RestTemplate` bean with explicit connect/read timeouts.
+
+**Test suite didn't compile:** `CorrelationEngineTest` was calling the constructor with 5 arguments while the class required 7 (now 8). The checked-in surefire report showing all green was stale from an earlier version of the class.
 
 ---
 

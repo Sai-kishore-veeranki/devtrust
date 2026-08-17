@@ -1,11 +1,13 @@
 package com.vsk.devtrust.consumer;
 
 import com.vsk.devtrust.ai.RootCauseAnalysisService;
+import com.vsk.devtrust.entity.DeploymentLogEntity;
 import com.vsk.devtrust.entity.IncidentEntity;
 import com.vsk.devtrust.model.AnomalyEvent;
 import com.vsk.devtrust.model.BlastRadius;
 import com.vsk.devtrust.model.CorrelatedIncident;
 import com.vsk.devtrust.model.DeploymentEvent;
+import com.vsk.devtrust.repository.DeploymentLogRepository;
 import com.vsk.devtrust.repository.IncidentRepository;
 import com.vsk.devtrust.service.BlastRadiusService;
 import com.vsk.devtrust.service.ServiceGraphService;
@@ -31,6 +33,7 @@ public class CorrelationEngine {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, DeploymentEvent> deploymentRedisTemplate;
     private final IncidentRepository incidentRepository;
+    private final DeploymentLogRepository deploymentLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final RootCauseAnalysisService rootCauseAnalysisService;
     private final BlastRadiusService blastRadiusService;
@@ -60,6 +63,22 @@ public class CorrelationEngine {
         } catch (Exception e) {
             log.error("Failed to store deployment in Redis for service [{}] — correlation may be missed",
                     event.getServiceName(), e);
+        }
+
+        // Persist every deployment we see (not just the ones that later correlate
+        // with an incident) — DORA's deployment frequency and change failure rate
+        // both need the true total, which IncidentEntity alone can never provide.
+        try {
+            deploymentLogRepository.save(DeploymentLogEntity.builder()
+                    .deploymentId(event.getDeploymentId())
+                    .commitId(event.getCommitId())
+                    .author(event.getAuthor())
+                    .serviceName(event.getServiceName())
+                    .environment(event.getEnvironment())
+                    .deployedAt(event.getTimestamp())
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to persist deployment log for service [{}]", event.getServiceName(), e);
         }
     }
 
