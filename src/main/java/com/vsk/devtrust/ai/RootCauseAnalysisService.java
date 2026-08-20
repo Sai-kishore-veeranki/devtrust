@@ -20,6 +20,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RootCauseAnalysisService {
 
+    private static final String FALLBACK_MESSAGE = "AI analysis unavailable. Manual investigation required.";
+
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -51,13 +53,55 @@ public class RootCauseAnalysisService {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
 
             String response = restTemplate.postForObject(apiUrl, request, String.class);
-            JsonNode root = objectMapper.readTree(response);
-
-            return root.path("choices").get(0).path("message").path("content").asText();
+            return extractContent(response, incident.getIncidentId());
 
         } catch (Exception e) {
             log.error("Failed to generate root cause analysis for incident [{}]", incident.getIncidentId(), e);
-            return "AI analysis unavailable. Manual investigation required.";
+            return FALLBACK_MESSAGE;
+        }
+    }
+
+    /**
+     * Pulls choices[0].message.content out of the response — but verifies the
+     * shape at every step instead of trusting it. JsonNode#asText() will happily
+     * stringify a number, a null, or anything else it lands on with no error,
+     * so a wrong path (or an unexpected response shape from the provider) fails
+     * *silently* as a plausible-looking string instead of an obvious error.
+     * That's how a stray usage.queue_time-style float can end up rendered as if
+     * it were the analysis. Logging the raw body here means the next time the
+     * shape is wrong, the logs show exactly what came back instead of us
+     * guessing from the symptom.
+     */
+    private String extractContent(String rawResponse, String incidentId) {
+        JsonNode root = readTreeSafely(rawResponse, incidentId);
+        if (root == null) return FALLBACK_MESSAGE;
+
+        JsonNode choices = root.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            log.error("Groq response for incident [{}] had no choices[]. Raw body: {}", incidentId, rawResponse);
+            return FALLBACK_MESSAGE;
+        }
+
+        JsonNode message = choices.get(0).path("message");
+        JsonNode content = message.path("content");
+
+        if (!content.isTextual() || content.asText().isBlank()) {
+            String finishReason = choices.get(0).path("finish_reason").asText("unknown");
+            log.error("Groq response for incident [{}] had non-text or empty content (finish_reason={}). Raw body: {}",
+                    incidentId, finishReason, rawResponse);
+            return FALLBACK_MESSAGE;
+        }
+
+        return content.asText();
+    }
+
+    private JsonNode readTreeSafely(String rawResponse, String incidentId) {
+        try {
+            return objectMapper.readTree(rawResponse);
+        } catch (Exception e) {
+            log.error("Could not parse Groq response as JSON for incident [{}]. Raw body: {}",
+                    incidentId, rawResponse, e);
+            return null;
         }
     }
 
