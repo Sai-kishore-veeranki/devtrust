@@ -49,6 +49,9 @@ management:
       application: devtrust
 
 devtrust:
+  jwt:
+    secret: ${JWT_SECRET:devtrust-local-dev-secret-key-must-be-at-least-32-characters-long}
+    expiration-minutes: 1440  # 24 hours in minutes
 
   ai:
     api-key: ${GROQ_API_KEY:groq-test-api-key}
@@ -57,17 +60,20 @@ devtrust:
 
   prometheus:
     url: http://localhost:9090
-    service-name: devtrust-frontend  # must match your GitHub repo name for correlation to work
+    service-name: devtrust-frontend
 
   github:
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:github-test-webhook-secret}
     token: ${GITHUB_TOKEN:github-test-token}
+
   kafka:
     topics:
       deployments: devtrust.deployments
       anomalies: devtrust.anomalies
       incidents: devtrust.incidents
+
   correlation:
-    window-seconds: 300   # correlate anomalies within 5 minutes of a deployment
+    window-seconds: 300
+
   detector:
-    cooldown-seconds: 300 # suppress re-firing the same metric breach for 5 minutes unless severity worsens
+    cooldown-seconds: 300
