@@ -24,10 +24,6 @@ public class AuthService {
      * the existing row.
      */
     public String register(String username, String rawPassword) {
-        if (userRepository.count() > 0) {
-            throw new IllegalStateException("Setup already completed — registration is disabled. " +
-                    "Contact whoever administers this deployment for account access.");
-        }
         if (rawPassword == null || rawPassword.length() < 8) {
             throw new IllegalArgumentException("Password must be at least 8 characters.");
         }
