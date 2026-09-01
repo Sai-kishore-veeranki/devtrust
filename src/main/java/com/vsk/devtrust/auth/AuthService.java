@@ -2,8 +2,9 @@ package com.vsk.devtrust.auth;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
@@ -13,7 +14,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Deliberately NOT open self-service registration. A monitoring dashboard
@@ -23,7 +24,20 @@ public class AuthService {
      * that fails, permanently, until someone with database access removes
      * the existing row.
      */
+    @Transactional
     public String register(String username, String rawPassword) {
+        if (!needsSetup()) {
+            throw new IllegalStateException("Registration is disabled.");
+        }
+
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username is required.");
+        }
+
+        if (userRepository.existsByUsername(username)) {
+            throw new IllegalArgumentException("Username already taken.");
+        }
+
         if (rawPassword == null || rawPassword.length() < 8) {
             throw new IllegalArgumentException("Password must be at least 8 characters.");
         }
