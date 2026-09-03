@@ -14,7 +14,7 @@ public class IncidentMapper {
         d.resolvedAt = e.getResolvedAt();
         d.estimatedRevenueLost = e.getEstimatedRevenueLost();
         d.estimatedUsersAffected = e.getEstimatedUsersAffected();
-        d.durationMinutes = e.getDurationMinutes();
+        d.durationMinutes = Double.valueOf(e.getDurationMinutes());
         d.costSummary = e.getCostSummary();
         return d;
     }
