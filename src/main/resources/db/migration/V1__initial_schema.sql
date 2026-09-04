@@ -1,62 +1,62 @@
--- Baseline schema for DevTrust (minimal safe defaults)
--- This migration creates the core tables used by the application.
-
-CREATE TABLE IF NOT EXISTS app_user (
-    id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(1024) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS deployment_log (
-    id BIGSERIAL PRIMARY KEY,
-    deployment_id VARCHAR(255) NOT NULL,
-    commit_id VARCHAR(255),
-    service_name VARCHAR(255) NOT NULL,
-    environment VARCHAR(64),
-    changed_files TEXT,
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS incident (
-    id BIGSERIAL PRIMARY KEY,
-    incident_id VARCHAR(255) NOT NULL UNIQUE,
-    service_name VARCHAR(255) NOT NULL,
-    commit_id VARCHAR(255),
-    detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    status VARCHAR(32) DEFAULT 'OPEN',
-    resolved_at TIMESTAMPTZ,
-    estimated_revenue_lost DOUBLE PRECISION,
-    estimated_users_affected DOUBLE PRECISION,
-    duration_minutes DOUBLE PRECISION,
-    cost_summary TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_incident_service_detected_at ON incident(service_name, detected_at);
-
-CREATE TABLE IF NOT EXISTS service_node (
-    id BIGSERIAL PRIMARY KEY,
-    service_name VARCHAR(255) NOT NULL UNIQUE,
-    tier VARCHAR(64),
-    status VARCHAR(32),
-    total_incidents INTEGER DEFAULT 0,
-    last_incident_at TIMESTAMPTZ,
-    last_updated TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS service_dependency (
-    id BIGSERIAL PRIMARY KEY,
-    from_service VARCHAR(255) NOT NULL,
-    to_service VARCHAR(255) NOT NULL,
-    dependency_type VARCHAR(32),
-    UNIQUE(from_service, to_service)
-);
-
-CREATE TABLE IF NOT EXISTS service_business_config (
-    id BIGSERIAL PRIMARY KEY,
-    service_name VARCHAR(255) NOT NULL UNIQUE,
-    revenue_per_minute DOUBLE PRECISION DEFAULT 0,
-    active_users_per_minute DOUBLE PRECISION DEFAULT 0,
-    sla_threshold_minutes INTEGER DEFAULT 0,
-    tier VARCHAR(64)
-);
+-- -- Baseline schema for DevTrust (minimal safe defaults)
+-- -- This migration creates the core tables used by the application.
+--
+-- CREATE TABLE IF NOT EXISTS app_user (
+--     id BIGSERIAL PRIMARY KEY,
+--     username VARCHAR(255) NOT NULL UNIQUE,
+--     password_hash VARCHAR(1024) NOT NULL,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS deployment_log (
+--     id BIGSERIAL PRIMARY KEY,
+--     deployment_id VARCHAR(255) NOT NULL,
+--     commit_id VARCHAR(255),
+--     service_name VARCHAR(255) NOT NULL,
+--     environment VARCHAR(64),
+--     changed_files TEXT,
+--     timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS incident (
+--     id BIGSERIAL PRIMARY KEY,
+--     incident_id VARCHAR(255) NOT NULL UNIQUE,
+--     service_name VARCHAR(255) NOT NULL,
+--     commit_id VARCHAR(255),
+--     detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+--     status VARCHAR(32) DEFAULT 'OPEN',
+--     resolved_at TIMESTAMPTZ,
+--     estimated_revenue_lost DOUBLE PRECISION,
+--     estimated_users_affected DOUBLE PRECISION,
+--     duration_minutes DOUBLE PRECISION,
+--     cost_summary TEXT
+-- );
+--
+-- CREATE INDEX IF NOT EXISTS idx_incident_service_detected_at ON incident(service_name, detected_at);
+--
+-- CREATE TABLE IF NOT EXISTS service_node (
+--     id BIGSERIAL PRIMARY KEY,
+--     service_name VARCHAR(255) NOT NULL UNIQUE,
+--     tier VARCHAR(64),
+--     status VARCHAR(32),
+--     total_incidents INTEGER DEFAULT 0,
+--     last_incident_at TIMESTAMPTZ,
+--     last_updated TIMESTAMPTZ
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS service_dependency (
+--     id BIGSERIAL PRIMARY KEY,
+--     from_service VARCHAR(255) NOT NULL,
+--     to_service VARCHAR(255) NOT NULL,
+--     dependency_type VARCHAR(32),
+--     UNIQUE(from_service, to_service)
+-- );
+--
+-- CREATE TABLE IF NOT EXISTS service_business_config (
+--     id BIGSERIAL PRIMARY KEY,
+--     service_name VARCHAR(255) NOT NULL UNIQUE,
+--     revenue_per_minute DOUBLE PRECISION DEFAULT 0,
+--     active_users_per_minute DOUBLE PRECISION DEFAULT 0,
+--     sla_threshold_minutes INTEGER DEFAULT 0,
+--     tier VARCHAR(64)
+-- );
