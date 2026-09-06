@@ -55,4 +55,8 @@ public class IncidentEntity {
 
     @Column(columnDefinition = "TEXT")
     private String costSummary;
+
+    public boolean isSlaBreached() {
+        return false;
+    }
 }
