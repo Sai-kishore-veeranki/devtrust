@@ -50,6 +50,22 @@ management:
 
 devtrust:
 
+  cors:
+    # Comma-separated, e.g. https://devtrust.yourstartup.com — set via
+    # DEVTRUST_CORS_ORIGINS in production. Defaults cover local Vite dev only.
+    allowed-origins: ${DEVTRUST_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+  jwt:
+    # No default on purpose, and no ":?message" syntax — that's a
+    # docker-compose/shell construct, not something Spring's property
+    # placeholder resolver understands. Omitting the default entirely is
+    # what actually makes this required: Spring throws a clear
+    # "could not resolve placeholder 'DEVTRUST_JWT_SECRET'" error at
+    # startup instead of silently signing tokens with a guessable string.
+    # Generate one with: openssl rand -base64 32
+    secret: ${DEVTRUST_JWT_SECRET:devtrust-secret-key-please-change-me}
+    expiration-minutes: ${DEVTRUST_JWT_EXPIRATION_MINUTES:1440}   # 24h — use 60 for a literal 1 hour
+
   ai:
     api-key: ${GROQ_API_KEY:test-api-key}
     api-url: https://api.groq.com/openai/v1/chat/completions
@@ -71,7 +87,3 @@ devtrust:
 
   correlation:
     window-seconds: 300   # correlate anomalies within 5 minutes of a deployment
-
-  jwt:
-    secret: ${JWT_SECRET:default-secret-key-dftgtftftdtrghftrd-gcdcfdtrdtrd}   # fallback if env var not set
-    expiration-minutes: 3600000                     # 1 hour
