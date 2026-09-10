@@ -62,6 +62,9 @@ When a PR is opened, DevTrust posts a risk score (0–100) as a bot comment dire
 ### DORA Metrics Hub
 Live engineering health dashboard: deployment frequency, change failure rate, and mean time to recovery — computed from real incident and deployment data, filterable by time period.
 
+### Service Runbooks
+Operational recovery playbooks are now first-class in DevTrust: each service can define a structured incident response checklist with owners, escalation steps, and expected outcomes. Operators can trigger and review the runbook directly from the API before or during an incident.
+
 ### Service Dependency Graph
 Interactive D3.js visualization of every service, its health status (healthy/degraded/critical), and its dependencies. Click any node to see incident history and blast radius. Hard dependencies shown as solid lines, soft as dashed.
 
@@ -170,6 +173,18 @@ PATCH /api/incidents/{id}/resolve             Mark incident as resolved
 
 ```
 GET   /api/dora?days=30                       Engineering health metrics for last N days
+```
+
+### Runbooks
+
+```
+GET   /api/runbooks                          List all service runbooks
+GET   /api/runbooks/service/{serviceName}    Service-specific runbooks
+GET   /api/runbooks/{id}                     Single runbook by id
+POST  /api/runbooks                          Create a new runbook
+PUT   /api/runbooks/{id}                     Update an existing runbook
+POST  /api/runbooks/{id}/execute             Execute a runbook and return the recovery checklist
+DELETE /api/runbooks/{id}                     Remove a runbook
 ```
 
 ### Service Graph

@@ -6,6 +6,7 @@ import com.vsk.devtrust.entity.ServiceNode;
 import com.vsk.devtrust.repository.ServiceBusinessConfigRepository;
 import com.vsk.devtrust.repository.ServiceDependencyRepository;
 import com.vsk.devtrust.repository.ServiceNodeRepository;
+import com.vsk.devtrust.runbook.RunbookService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -23,11 +24,13 @@ public class DataSeeder implements ApplicationRunner {
     private final ServiceBusinessConfigRepository configRepository;
     private final ServiceDependencyRepository dependencyRepository;
     private final ServiceNodeRepository serviceNodeRepository;
+    private final RunbookService runbookService;
 
     @Override
     public void run(ApplicationArguments args) {
         seedBusinessConfigs();
         seedServiceGraph();
+        runbookService.seedDefaults();
     }
 
     private void seedBusinessConfigs() {
