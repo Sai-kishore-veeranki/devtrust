@@ -27,7 +27,10 @@ public class RunbookService {
     }
 
     public List<RunbookEntity> listByService(String serviceName) {
-        return repository.findByServiceNameOrderByCreatedAtDesc(serviceName);
+        String normalized = normalizeText(serviceName);
+        return normalized.isBlank()
+                ? List.of()
+                : repository.findByServiceNameOrderByCreatedAtDesc(normalized);
     }
 
     public RunbookEntity getById(Long id) {
@@ -39,13 +42,18 @@ public class RunbookService {
     public RunbookEntity create(RunbookRequest request) {
         validate(request);
 
+        String title = normalizeText(request.getTitle());
+        String serviceName = normalizeText(request.getServiceName());
+        String trigger = normalizeText(request.getTrigger());
+        String summary = normalizeText(request.getSummary());
+
         RunbookEntity entity = RunbookEntity.builder()
-                .slug(buildSlug(request.getTitle()))
-                .title(request.getTitle().trim())
-                .serviceName(request.getServiceName().trim())
+                .slug(buildSlug(title))
+                .title(title)
+                .serviceName(serviceName)
                 .severity(request.getSeverity())
-                .trigger(request.getTrigger().trim())
-                .summary(request.getSummary() == null ? "" : request.getSummary().trim())
+                .trigger(trigger)
+                .summary(summary)
                 .active(true)
                 .steps(normalizeSteps(request.getSteps()))
                 .owners(normalizeOwners(request.getOwners()))
@@ -59,14 +67,19 @@ public class RunbookService {
         RunbookEntity existing = getById(id);
         validate(request);
 
-        existing.setTitle(request.getTitle().trim());
-        existing.setServiceName(request.getServiceName().trim());
+        String title = normalizeText(request.getTitle());
+        String serviceName = normalizeText(request.getServiceName());
+        String trigger = normalizeText(request.getTrigger());
+        String summary = normalizeText(request.getSummary());
+
+        existing.setTitle(title);
+        existing.setServiceName(serviceName);
         existing.setSeverity(request.getSeverity());
-        existing.setTrigger(request.getTrigger().trim());
-        existing.setSummary(request.getSummary() == null ? "" : request.getSummary().trim());
+        existing.setTrigger(trigger);
+        existing.setSummary(summary);
         existing.setSteps(normalizeSteps(request.getSteps()));
         existing.setOwners(normalizeOwners(request.getOwners()));
-        existing.setSlug(buildSlug(request.getTitle(), existing.getSlug()));
+        existing.setSlug(buildSlug(title, existing.getSlug()));
         existing.setUpdatedAt(Instant.now());
 
         return repository.save(existing);
@@ -180,18 +193,22 @@ public class RunbookService {
         if (request == null) {
             throw new IllegalArgumentException("Runbook request is required.");
         }
-        if (request.getTitle() == null || request.getTitle().isBlank()) {
+        if (normalizeText(request.getTitle()).isBlank()) {
             throw new IllegalArgumentException("title is required.");
         }
-        if (request.getServiceName() == null || request.getServiceName().isBlank()) {
+        if (normalizeText(request.getServiceName()).isBlank()) {
             throw new IllegalArgumentException("serviceName is required.");
         }
-        if (request.getTrigger() == null || request.getTrigger().isBlank()) {
+        if (normalizeText(request.getTrigger()).isBlank()) {
             throw new IllegalArgumentException("trigger is required.");
         }
         if (request.getSeverity() == null) {
             throw new IllegalArgumentException("severity is required.");
         }
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String buildSlug(String title) {
@@ -221,13 +238,15 @@ public class RunbookService {
         return steps.stream()
                 .filter(Objects::nonNull)
                 .map(step -> RunbookStep.builder()
-                        .title(step.getTitle() == null ? "Untitled step" : step.getTitle().trim())
-                        .description(step.getDescription() == null ? "" : step.getDescription().trim())
-                        .action(step.getAction() == null ? "Review the service state and continue with the recovery plan." : step.getAction().trim())
-                        .owner(step.getOwner() == null || step.getOwner().isBlank() ? "oncall" : step.getOwner().trim())
-                        .expectedOutcome(step.getExpectedOutcome() == null || step.getExpectedOutcome().isBlank()
+                        .title(normalizeText(step.getTitle()).isBlank() ? "Untitled step" : normalizeText(step.getTitle()))
+                        .description(normalizeText(step.getDescription()))
+                        .action(normalizeText(step.getAction()).isBlank()
+                                ? "Review the service state and continue with the recovery plan."
+                                : normalizeText(step.getAction()))
+                        .owner(normalizeText(step.getOwner()).isBlank() ? "oncall" : normalizeText(step.getOwner()))
+                        .expectedOutcome(normalizeText(step.getExpectedOutcome()).isBlank()
                                 ? "Service recovered and validated"
-                                : step.getExpectedOutcome().trim())
+                                : normalizeText(step.getExpectedOutcome()))
                         .build())
                 .collect(Collectors.toList());
     }
@@ -239,7 +258,7 @@ public class RunbookService {
 
         return owners.stream()
                 .filter(Objects::nonNull)
-                .map(String::trim)
+                .map(this::normalizeText)
                 .filter(value -> !value.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
