@@ -2,70 +2,120 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-    ports:
-      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    restart: unless-stopped
     depends_on:
       - zookeeper
-    ports:
-      - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # Two listeners: INTERNAL is what other containers (devtrust-app) use,
+      # EXTERNAL is only for debugging from your host machine. The previous
+      # single-listener config advertised "localhost:9092" to every client —
+      # fine when the app ran on the host, broken the moment the app itself
+      # moves into a container, because "localhost" then means the app
+      # container, not the kafka container.
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
 
   redis:
     image: redis:7.2-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    # No host port exposed on purpose — only devtrust-app (on the same
+    # docker network) needs to reach this. Add "ports: - 6379:6379" back
+    # temporarily if you want to connect a local Redis GUI for debugging.
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     environment:
       POSTGRES_DB: devtrust
       POSTGRES_USER: devtrust
-      POSTGRES_PASSWORD: devtrust123
+      # No fallback default here on purpose — docker-compose refuses to
+      # start with a clear error if POSTGRES_PASSWORD isn't set in .env,
+      # instead of silently running with "devtrust123" for anyone who can
+      # reach this server.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-
+    # No host port exposed on purpose, same reasoning as redis above.
 
   prometheus:
     image: prom/prometheus:v2.51.0
-    ports:
-      - "9090:9090"
+    restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-#  devtrust-app:
-#    build: .
-#    ports:
-#      - "8080:8080"
-#    depends_on:
-#      - kafka
-#      - redis
-#      - postgres
-#    environment:
-#      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-#      SPRING_DATA_REDIS_HOST: redis
-#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devtrust
-#      GROQ_API_KEY: ${GROQ_API_KEY:test-api-key}
-#      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:test-webhook-secret}
+  devtrust-app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+      - prometheus
+    environment:
+      # dev profile is deliberately NOT set here — keeps any dev-only
+      # endpoints out of this build entirely. Only ever set
+      # SPRING_PROFILES_ACTIVE=dev on your own machine, never in this file.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/devtrust
+      SPRING_DATASOURCE_USERNAME: devtrust
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATA_REDIS_HOST: redis
+      GROQ_API_KEY: ${GROQ_API_KEY:?Set GROQ_API_KEY in your .env file}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?Set GITHUB_WEBHOOK_SECRET in your .env file}
+      DEVTRUST_JWT_SECRET: ${DEVTRUST_JWT_SECRET:?Set DEVTRUST_JWT_SECRET in your .env file — generate with: openssl rand -base64 32}
+      DEVTRUST_SMTP_HOST: ${DEVTRUST_SMTP_HOST:-smtp.gmail.com}
+      DEVTRUST_SMTP_PORT: ${DEVTRUST_SMTP_PORT:-587}
+      DEVTRUST_SMTP_USERNAME: ${DEVTRUST_SMTP_USERNAME:-}
+      DEVTRUST_SMTP_PASSWORD: ${DEVTRUST_SMTP_PASSWORD:-}
+      DEVTRUST_NOTIFY_EMAIL_TO: ${DEVTRUST_NOTIFY_EMAIL_TO:-}
+    expose:
+      - "8080"
+
+  # Reverse proxy with automatic HTTPS (Let's Encrypt). Makes the app
+  # reachable at https://your-domain instead of raw :8080, which GitHub's
+  # webhook delivery expects and browsers are happier with too.
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - devtrust-app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   redis-data:
   postgres-data:
-
+  zookeeper-data:
+  kafka-data:
+  prometheus-data:
+  caddy-data:
+  caddy-config:
