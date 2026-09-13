@@ -9,13 +9,22 @@ public class IncidentMapper {
         d.incidentId = e.getIncidentId();
         d.serviceName = e.getServiceName();
         d.commitId = e.getCommitId();
+        d.author = e.getAuthor();
+        d.metricName = e.getMetricName();
+        d.anomalyValue = e.getAnomalyValue();
+        d.threshold = e.getThreshold();
+        d.severity = e.getSeverity();
+        d.deltaSeconds = e.getDeltaSeconds();
+        d.confidenceScore = e.getConfidenceScore();
         d.detectedAt = e.getDetectedAt();
         d.status = e.getStatus();
         d.resolvedAt = e.getResolvedAt();
         d.estimatedRevenueLost = e.getEstimatedRevenueLost();
         d.estimatedUsersAffected = e.getEstimatedUsersAffected();
-        d.durationMinutes = Double.valueOf(e.getDurationMinutes());
+        d.durationMinutes = e.getDurationMinutes() != null ? Double.valueOf(e.getDurationMinutes()) : null;
+        d.slaBreached = e.isSlaBreached();
         d.costSummary = e.getCostSummary();
+        d.rootCauseAnalysis = e.getRootCauseAnalysis();
         return d;
     }
 }

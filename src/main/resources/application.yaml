@@ -67,9 +67,9 @@ devtrust:
     expiration-minutes: ${DEVTRUST_JWT_EXPIRATION_MINUTES:1440}   # 24h — use 60 for a literal 1 hour
 
   ai:
-    api-key: ${GROQ_API_KEY:test-api-key}
+    api-key: ${GROQ_API_KEY:test-groq-api-key}
     api-url: https://api.groq.com/openai/v1/chat/completions
-    model: llama-3.3-70b-versatile
+    model: openai/gpt-oss-120b
 
   prometheus:
     url: http://localhost:9090

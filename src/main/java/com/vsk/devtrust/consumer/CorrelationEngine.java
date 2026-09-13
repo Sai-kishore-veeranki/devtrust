@@ -20,6 +20,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import com.vsk.devtrust.dto.IncidentMapper;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -163,7 +164,7 @@ public class CorrelationEngine {
         // Auto-register / update the service node in the dependency graph
         serviceGraphService.registerOrUpdateService(savedEntity);
 
-        messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
+        messagingTemplate.convertAndSend("/topic/incidents", IncidentMapper.toDto(savedEntity));
 
         log.warn("CORRELATION DETECTED | service={} commit={} author={} metric={} severity={} delta={}s confidence={}% revenue_lost=${} sla_breached={}",
                 anomaly.getServiceName(), recentDeploy.getCommitId(), recentDeploy.getAuthor(),
@@ -177,7 +178,7 @@ public class CorrelationEngine {
         savedEntity.setRootCauseAnalysis(rootCause);
         incidentRepository.save(savedEntity);
 
-        messagingTemplate.convertAndSend("/topic/incidents", savedEntity);
+        messagingTemplate.convertAndSend("/topic/incidents", IncidentMapper.toDto(savedEntity));
 
         log.info("AI root cause generated for incident [{}]: {}", savedEntity.getIncidentId(), rootCause);
     }

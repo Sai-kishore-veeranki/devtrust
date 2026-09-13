@@ -57,6 +57,6 @@ public class IncidentEntity {
     private String costSummary;
 
     public boolean isSlaBreached() {
-        return false;
+        return Boolean.TRUE.equals(slaBreached);
     }
 }
