@@ -26,16 +26,13 @@ public class JwtService {
     void validateKey() {
         if (secret == null || secret.getBytes().length < 32) {
             throw new IllegalStateException(
-                    "Configured JWT secret is too weak; it must be at least 32 bytes (256 bits) for HMAC-SHA256. " +
-                    "Generate one with: openssl rand -base64 32");
+                    "Configured JWT secret is too weak; must be at least 32 bytes (256 bits). " +
+                            "Generate one with: openssl rand -base64 32"
+            );
         }
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    // Now takes the full User instead of just a username — the token needs
-    // to carry email/fullName/role so the frontend can decode a real
-    // identity from it, and so JwtAuthFilter can populate a real Spring
-    // Security authority instead of an empty list.
     public String generateToken(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMinutes * 60_000);

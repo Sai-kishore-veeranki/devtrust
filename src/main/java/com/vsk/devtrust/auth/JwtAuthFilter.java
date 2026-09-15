@@ -23,24 +23,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                     @NonNull HttpServletResponse response,
-                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
+        String path = request.getServletPath();
+        // Skip JWT validation for public endpoints
+        if (path.startsWith("/api/auth/") || path.startsWith("/webhooks/")
+                || path.startsWith("/actuator/") || path.startsWith("/ws/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         String header = request.getHeader("Authorization");
-
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
 
             if (jwtService.isValid(token)) {
                 String username = jwtService.extractUsername(token);
-
-                // Role claim now populates a real authority (ROLE_ADMIN /
-                // ROLE_MEMBER) instead of an empty list — this was a no-op
-                // before since the JWT never carried a role at all. Lays
-                // the groundwork for @PreAuthorize("hasRole('ADMIN')") on
-                // Phase B's invite-creation endpoint without needing
-                // another pass through this file.
                 String role = jwtService.extractRole(token);
+
                 List<SimpleGrantedAuthority> authorities = role != null
                         ? List.of(new SimpleGrantedAuthority("ROLE_" + role))
                         : List.of();
