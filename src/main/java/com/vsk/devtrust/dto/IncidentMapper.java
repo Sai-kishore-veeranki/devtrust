@@ -19,6 +19,7 @@ public class IncidentMapper {
         d.detectedAt = e.getDetectedAt();
         d.status = e.getStatus();
         d.resolvedAt = e.getResolvedAt();
+        d.resolvedBy = e.getResolvedBy();
         d.estimatedRevenueLost = e.getEstimatedRevenueLost();
         d.estimatedUsersAffected = e.getEstimatedUsersAffected();
         d.durationMinutes = e.getDurationMinutes() != null ? Double.valueOf(e.getDurationMinutes()) : null;

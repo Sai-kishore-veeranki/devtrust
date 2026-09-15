@@ -16,6 +16,7 @@ public class IncidentDto {
     public Instant detectedAt;
     public String status;
     public Instant resolvedAt;
+    public String resolvedBy;
     public Double estimatedRevenueLost;
     public Double estimatedUsersAffected;
     public Double durationMinutes;

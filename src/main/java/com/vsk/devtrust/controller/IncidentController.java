@@ -6,6 +6,7 @@ import com.vsk.devtrust.repository.IncidentRepository;
 import com.vsk.devtrust.service.BlastRadiusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -45,12 +46,13 @@ public class IncidentController {
     }
 
     @PatchMapping("/{incidentId}/resolve")
-    public ResponseEntity<com.vsk.devtrust.dto.IncidentDto> resolveIncident(@PathVariable String incidentId) {
+    public ResponseEntity<?> resolveIncident(@PathVariable String incidentId, Authentication authentication) {
         return incidentRepository.findByIncidentId(incidentId)
                 .map(incident -> {
                     Instant resolvedAt = Instant.now();
                     incident.setStatus("RESOLVED");
-                    incident.setResolvedAt(resolvedAt);
+                    // Add this one line, right after incident.setResolvedAt(resolvedAt);
+                    incident.setResolvedBy(authentication != null ? authentication.getName() : "unknown");
 
                     // Recompute with real total duration now that it's resolved
                     BlastRadius finalBlastRadius = blastRadiusService.compute(incident, resolvedAt);

@@ -15,7 +15,8 @@ public class AuthController {
 
     private final AuthService authService;
 
-    public record Credentials(String username, String password) {}
+    public record LoginRequest(String username, String password) {}
+    public record RegisterRequest(String username, String email, String fullName, String password) {}
 
     @GetMapping("/setup-status")
     public ResponseEntity<Map<String, Boolean>> setupStatus() {
@@ -23,9 +24,9 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Credentials req) {
+    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
         try {
-            String token = authService.register(req.username(), req.password());
+            String token = authService.register(req.username(), req.email(), req.fullName(), req.password());
             return ResponseEntity.ok(Map.of("token", token));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
@@ -35,7 +36,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Credentials req) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
         try {
             String token = authService.login(req.username(), req.password());
             return ResponseEntity.ok(Map.of("token", token));

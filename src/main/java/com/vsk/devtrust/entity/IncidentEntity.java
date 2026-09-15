@@ -44,6 +44,9 @@ public class IncidentEntity {
     private Instant resolvedAt;
 
     @Column
+    private String resolvedBy;
+
+    @Column
     @Builder.Default
     private String status = "OPEN";
 

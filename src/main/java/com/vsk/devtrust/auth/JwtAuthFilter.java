@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -32,11 +33,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             if (jwtService.isValid(token)) {
                 String username = jwtService.extractUsername(token);
-                // Only set authentication if not already present
-                if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                    var auth = new UsernamePasswordAuthenticationToken(username, null, List.of());
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
+
+                // Role claim now populates a real authority (ROLE_ADMIN /
+                // ROLE_MEMBER) instead of an empty list — this was a no-op
+                // before since the JWT never carried a role at all. Lays
+                // the groundwork for @PreAuthorize("hasRole('ADMIN')") on
+                // Phase B's invite-creation endpoint without needing
+                // another pass through this file.
+                String role = jwtService.extractRole(token);
+                List<SimpleGrantedAuthority> authorities = role != null
+                        ? List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                        : List.of();
+
+                var auth = new UsernamePasswordAuthenticationToken(username, null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
 

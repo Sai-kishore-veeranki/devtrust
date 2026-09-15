@@ -23,8 +23,22 @@ public class User {
     @Column(unique = true, nullable = false)
     private String username;
 
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    private String fullName;
+
     @Column(nullable = false)
     private String passwordHash;
+
+    // Bootstrap registration (still the only path until Phase B's invites
+    // exist) always creates an ADMIN — whoever sets this deployment up is
+    // the owner. Invited teammates in Phase B will get MEMBER explicitly,
+    // not through this default.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private Role role = Role.ADMIN;
 
     private Instant createdAt;
 }

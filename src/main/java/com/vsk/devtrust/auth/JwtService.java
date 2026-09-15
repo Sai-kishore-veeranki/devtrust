@@ -2,11 +2,12 @@ package com.vsk.devtrust.auth;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
@@ -19,36 +20,43 @@ public class JwtService {
     @Value("${devtrust.jwt.expiration-minutes}")
     private long expirationMinutes;
 
+    private SecretKey key;
+
     @PostConstruct
-    private void validateKey() {
-        try {
-            key();
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Configured JWT secret is too weak; it must be at least 32 bytes.", e);
+    void validateKey() {
+        if (secret == null || secret.getBytes().length < 32) {
+            throw new IllegalStateException(
+                    "Configured JWT secret is too weak; it must be at least 32 bytes (256 bits) for HMAC-SHA256. " +
+                    "Generate one with: openssl rand -base64 32");
         }
+        this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    private SecretKey key() {
-        // HMAC-SHA256 needs a key of at least 256 bits (32 bytes). Fails
-        // fast and clearly at startup if a weak DEVTRUST_JWT_SECRET was
-        // configured, instead of a confusing crypto exception at request time.
-        return Keys.hmacShaKeyFor(secret.getBytes());
-    }
-
-    public String generateToken(String username) {
+    // Now takes the full User instead of just a username — the token needs
+    // to carry email/fullName/role so the frontend can decode a real
+    // identity from it, and so JwtAuthFilter can populate a real Spring
+    // Security authority instead of an empty list.
+    public String generateToken(User user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMinutes * 60_000);
 
         return Jwts.builder()
-                .setSubject(username)
+                .setSubject(user.getUsername())
+                .claim("email", user.getEmail())
+                .claim("fullName", user.getFullName())
+                .claim("role", user.getRole().name())
                 .setIssuedAt(now)
                 .setExpiration(expiry)
-                .signWith(key())
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public String extractUsername(String token) {
         return parseClaims(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        return parseClaims(token).get("role", String.class);
     }
 
     public boolean isValid(String token) {
@@ -61,10 +69,8 @@ public class JwtService {
     }
 
     private Claims parseClaims(String token) {
-        // Use the parserBuilder API to set the signing key and parse a JWS
-        // which returns a Jws<Claims> whose body is the Claims instance.
         return Jwts.parserBuilder()
-                .setSigningKey(key())
+                .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
