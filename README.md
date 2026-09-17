@@ -66,12 +66,28 @@ Live engineering health dashboard: deployment frequency, change failure rate, an
 Operational recovery playbooks are now first-class in DevTrust: each service can define a structured incident response checklist with owners, escalation steps, and expected outcomes. Operators can trigger and review the runbook directly from the API before or during an incident.
 
 ### Service Dependency Graph
+
 Interactive D3.js visualization of every service, its health status (healthy/degraded/critical), and its dependencies. Click any node to see incident history and blast radius. Hard dependencies shown as solid lines, soft as dashed.
+
+### Authentication & Secure API Access
+
+DevTrust includes a JWT-backed authentication layer for the backend API. Users can register or log in through `/api/auth`, the app exposes setup-status checks for first-run bootstrapping, and Spring Security protects all `/api/**` routes while leaving webhook and health endpoints public.
+
+### Email Alerting & Incident Notifications
+
+When an incident is raised, DevTrust can send formatted email alerts to configured recipients. Notification settings are driven by SMTP env vars and the poller checks for newly opened incidents so ops teams can receive HIGH/CRITICAL pages without monitoring the dashboard manually.
+
+### Service Registry & Per-Service Configuration
+
+The project includes a database-backed `MonitoredService` registry for storing repo URLs, webhook secrets, latency/heap thresholds, business tiers, and active status per service. This provides a cleaner configuration model than hardcoded YAML values and is exposed through CRUD endpoints under `/api/registry/services`.
+
+### Incident War Room Summaries
+
+The backend can turn active incidents into a concise war-room briefing: primary service, severity headline, impacted service list, revenue-at-risk total, and recommended response actions. This gives responders a faster triage handoff before an incident is handed to the full on-call team.
 
 ---
 
 ## Tech Stack
-
 | Layer | Technology |
 |---|---|
 | Backend | Spring Boot 4.1, Java 21 |
@@ -82,7 +98,9 @@ Interactive D3.js visualization of every service, its health status (healthy/deg
 | Monitoring | Prometheus + Micrometer |
 | AI | Groq API (openai/gpt-oss-120b) |
 | Frontend | React 18, Vite, D3.js |
-| Security | HMAC-SHA256 webhook signature verification |
+| Security | HMAC-SHA256 webhook signature verification, JWT auth, Spring Security |
+| API documentation | OpenAPI / Swagger |
+| Notifications | SMTP email alerts for HIGH/CRITICAL incidents |
 | Containerization | Docker, Docker Compose |
 
 ---
@@ -113,6 +131,12 @@ Create a `.env` file in the project root:
 GROQ_API_KEY=your_groq_api_key_here
 GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
 GITHUB_TOKEN=your_github_personal_access_token_here
+DEVTRUST_JWT_SECRET=generate_a_strong_random_secret_here
+DEVTRUST_SMTP_HOST=smtp.gmail.com
+DEVTRUST_SMTP_PORT=587
+DEVTRUST_SMTP_USERNAME=alerts@yourstartup.com
+DEVTRUST_SMTP_PASSWORD=your_smtp_app_password
+DEVTRUST_NOTIFY_EMAIL_TO=you@yourstartup.com,ops@yourstartup.com
 ```
 
 ### 3. Start the full stack
@@ -160,6 +184,14 @@ Within 15–30 seconds, an incident card will appear on your dashboard with a co
 
 ## API Reference
 
+### Authentication
+
+```
+GET   /api/auth/setup-status                  Check whether the first-time setup is required
+POST  /api/auth/register                     Register a new user and receive a JWT
+POST  /api/auth/login                        Log in and receive a JWT
+```
+
 ### Incidents
 
 ```
@@ -167,6 +199,22 @@ GET   /api/incidents                          Latest 20 incidents
 GET   /api/incidents/{id}                     Single incident by ID
 GET   /api/incidents/service/{serviceName}    Incidents for a specific service
 PATCH /api/incidents/{id}/resolve             Mark incident as resolved
+```
+
+### Service Registry
+
+```
+GET   /api/registry/services                  List all monitored services
+GET   /api/registry/services/{serviceName}    Fetch one monitored service
+POST  /api/registry/services                  Create a monitored service config
+PUT   /api/registry/services/{serviceName}    Update a monitored service config
+DELETE /api/registry/services/{serviceName}   Remove a monitored service config
+```
+
+### War Room
+
+```
+GET   /api/warroom/summary                    Incident war-room summary for active incidents
 ```
 
 ### DORA Metrics
@@ -270,28 +318,31 @@ Four signals contribute to the 0–100 risk score:
 devtrust/
 ├── src/main/java/com/vsk/devtrust/
 │   ├── ai/                    # Groq AI root cause analysis
-│   ├── config/                # Kafka, Redis, WebSocket, CORS, shared RestTemplate, data seeding
-│   ├── consumer/              # Kafka consumers (CorrelationEngine)
-│   ├── controller/            # REST controllers + GitHub webhook
-│   ├── detector/              # Prometheus anomaly detection
-│   ├── entity/                # JPA entities (incidents, deployment log, service graph)
-│   ├── model/                 # Event models (DeploymentEvent, AnomalyEvent, etc.)
-│   ├── repository/            # Spring Data JPA repositories
-│   ├── service/               # Business logic (blast radius, risk scorer, graph, DORA)
-│   └── simulator/             # Event simulator (disabled in production)
-├── devtrust-frontend/
-│   └── src/
-│       ├── components/        # React components
-│       │   ├── IncidentCard.jsx
-│       │   ├── IncidentFeed.jsx
-│       │   ├── DoraMetrics.jsx
-│       │   └── ServiceGraph.jsx
-│       └── services/          # API client (single source of truth for the backend base URL) and WebSocket client
-├── prometheus.yml             # Prometheus scrape config
-├── docker-compose.yml         # Full stack local + production setup
-├── Dockerfile                 # Multi-stage Spring Boot build
+│   ├── auth/                 # JWT auth, registration, login, security filters
+│   ├── config/               # Kafka, Redis, WebSocket, CORS, shared RestTemplate, data seeding
+│   ├── consumer/             # Kafka consumers (CorrelationEngine)
+│   ├── controller/           # REST controllers + GitHub webhook
+│   ├── detector/             # Prometheus anomaly detection
+│   ├── entity/               # JPA entities (incidents, deployment log, service graph)
+│   ├── model/                # Event models (DeploymentEvent, AnomalyEvent, etc.)
+│   ├── notification/         # Email alerting and notification polling
+│   ├── registry/             # Monitored service registry CRUD
+│   ├── repository/           # Spring Data JPA repositories
+│   ├── runbook/              # Incident runbooks and execution flow
+│   ├── service/              # Business logic (blast radius, risk scorer, graph, DORA)
+│   ├── simulator/            # Event simulator (disabled in production)
+│   ├── warroom/              # Incident war-room summary generation
+│   └── ...
+├── docs/
+│   └── async-ai.md           # Async AI worker design notes
+├── prometheus.yml            # Prometheus scrape config
+├── docker-compose.yml        # Full stack local + production setup
+├── Dockerfile                # Multi-stage Spring Boot build
+├── .env.example              # Environment variable template
 └── README.md
 ```
+
+This repository is primarily the backend service; if you also run the companion dashboard or frontend app, it connects to these APIs over HTTP and WebSocket and uses the same incident data exposed here.
 
 ---
 
