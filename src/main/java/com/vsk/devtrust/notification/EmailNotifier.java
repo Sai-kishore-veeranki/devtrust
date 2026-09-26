@@ -1,7 +1,6 @@
 package com.vsk.devtrust.notification;
 
 import com.vsk.devtrust.entity.IncidentEntity;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,12 +8,15 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
+import java.time.format.DateTimeFormatter;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class EmailNotifier {
+public class EmailNotifier implements NotificationProvider {
 
     private final JavaMailSender mailSender;
+    private final NotificationProperties properties;
 
     @Value("${DEVTRUST_SMTP_USERNAME:}")
     private String smtpUsername;
@@ -22,78 +24,65 @@ public class EmailNotifier {
     @Value("${DEVTRUST_SMTP_PASSWORD:}")
     private String smtpPassword;
 
-    // Comma-separated for multiple recipients, e.g. "alice@x.com,bob@x.com"
-    @Value("${DEVTRUST_NOTIFY_EMAIL_TO:}")
-    private String toAddresses;
-
-    // Optional — defaults to the SMTP username if not set separately
-    @Value("${DEVTRUST_NOTIFY_EMAIL_FROM:}")
-    private String fromAddressOverride;
-
-    @PostConstruct
-    void logStatus() {
-        if (isEnabled()) {
-            log.info("Email notifications enabled — sending to {}", toAddresses);
-        } else {
-            log.info("Email notifications disabled — set DEVTRUST_SMTP_USERNAME, " +
-                    "DEVTRUST_SMTP_PASSWORD, and DEVTRUST_NOTIFY_EMAIL_TO to enable.");
-        }
+    @Override
+    public NotificationChannel getChannel() {
+        return NotificationChannel.EMAIL;
     }
 
+    @Override
     public boolean isEnabled() {
-        return notBlank(smtpUsername) && notBlank(smtpPassword) && notBlank(toAddresses);
+        NotificationProperties.EmailConfig email = properties.getEmail();
+        return email.isEnabled()
+                && notBlank(smtpUsername)
+                && notBlank(smtpPassword)
+                && notBlank(email.getDefaultRecipient());
     }
 
-    public void send(IncidentEntity incident) {
-        if (!isEnabled()) {
-            return;
-        }
+    @Override
+    public void sendAlert(IncidentEntity incident) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(properties.getEmail().getFrom());
+        message.setTo(properties.getEmail().getDefaultRecipient());
+        message.setSubject(String.format("[DevTrust Alert][%s] %s - %s",
+                incident.getSeverity(), incident.getServiceName(), incident.getMetricName()));
+        message.setText(String.format("""
+                DevTrust Incident Notification
+                =================================
+                Incident ID: %s
+                Service:     %s
+                Severity:    %s
+                Status:      %s
+                Detected At: %s
 
-        String fromAddress = notBlank(fromAddressOverride) ? fromAddressOverride : smtpUsername;
-        String[] recipients = toAddresses.split(",");
-        for (int i = 0; i < recipients.length; i++) {
-            recipients[i] = recipients[i].trim();
-        }
+                Metric: %s
+                Value:  %.2f (threshold %.2f)
+                Commit: %s
+                Author: %s
 
-        String subject = String.format("[DevTrust] %s incident — %s",
-                incident.getSeverity(), incident.getServiceName());
+                Root Cause:
+                %s
 
-        String body = String.format(
-                "%s severity incident detected on %s%n%n" +
-                "Metric: %s = %.1f (threshold %.1f)%n" +
-                "Deploy: %s by %s — %ds before the anomaly (%.0f%% confidence)%n" +
-                "Impact: $%.2f at risk, ~%d users affected%s%n%n" +
-                "%s",
-                incident.getSeverity(),
+                Cost Summary:
+                %s
+                """,
+                incident.getIncidentId(),
                 incident.getServiceName(),
+                incident.getSeverity(),
+                incident.getStatus(),
+                incident.getDetectedAt() != null
+                        ? DateTimeFormatter.ISO_INSTANT.format(incident.getDetectedAt()) : "N/A",
                 incident.getMetricName(),
                 incident.getAnomalyValue(),
                 incident.getThreshold(),
                 incident.getCommitId(),
                 incident.getAuthor(),
-                incident.getDeltaSeconds(),
-                incident.getConfidenceScore() * 100,
-                incident.getEstimatedRevenueLost(),
-                incident.getEstimatedUsersAffected(),
-                incident.isSlaBreached() ? "\n*** SLA BREACHED ***" : "",
-                incident.getCostSummary() != null ? incident.getCostSummary() : ""
-        );
-
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
-            message.setTo(recipients);
-            message.setSubject(subject);
-            message.setText(body);
-            mailSender.send(message);
-        } catch (Exception e) {
-            // A failed send should never affect incident detection itself —
-            // log and move on, same principle as the Slack version.
-            log.error("Failed to send email notification for incident [{}]", incident.getIncidentId(), e);
-        }
+                incident.getRootCauseAnalysis() != null ? incident.getRootCauseAnalysis() : "N/A",
+                incident.getCostSummary() != null ? incident.getCostSummary() : "N/A"));
+        mailSender.send(message);
+        log.info("Email alert dispatched for incident {}", incident.getIncidentId());
     }
 
-    private boolean notBlank(String s) {
-        return s != null && !s.isBlank();
+    private boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 }

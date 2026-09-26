@@ -50,6 +50,32 @@ management:
 
 devtrust:
 
+  notifications:
+    email:
+      enabled: ${DEVTRUST_NOTIFICATIONS_EMAIL_ENABLED:false}
+      from: ${DEVTRUST_NOTIFY_EMAIL_FROM:alerts@devtrust.io}
+      defaultRecipient: ${DEVTRUST_NOTIFY_EMAIL_TO:}
+    slack:
+      enabled: ${DEVTRUST_NOTIFICATIONS_SLACK_ENABLED:false}
+      webhookUrl: ${SLACK_WEBHOOK_URL:}
+      channelName: "#incidents"
+    pagerduty:
+      enabled: ${DEVTRUST_NOTIFICATIONS_PAGERDUTY_ENABLED:false}
+      routingKey: ${PAGERDUTY_ROUTING_KEY:}
+      eventsApiUrl: ${PAGERDUTY_EVENTS_API_URL:https://events.pagerduty.com/v2/enqueue}
+    routing:
+      CRITICAL:
+        - PAGERDUTY
+        - SLACK
+        - EMAIL
+      HIGH:
+        - SLACK
+        - EMAIL
+      MEDIUM:
+        - SLACK
+      DEFAULT:
+        - EMAIL
+
   cors:
     # Comma-separated, e.g. https://devtrust.yourstartup.com — set via
     # DEVTRUST_CORS_ORIGINS in production. Defaults cover local Vite dev only.
@@ -72,8 +98,8 @@ devtrust:
     model: openai/gpt-oss-120b
 
   prometheus:
-    url: http://localhost:9090
-    service-name: new-test-repo  # must match your GitHub repo name for correlation to work
+    url: http://localhost:9091
+    service-name: demo-client  # must match your GitHub repo name for correlation to work
 
   github:
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:test-webhook-secret}

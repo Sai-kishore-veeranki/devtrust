@@ -1,6 +1,12 @@
 package com.vsk.devtrust.notification;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,13 +14,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/**
- * Separate table rather than a "notified" column added to IncidentEntity —
- * keeps this module a pure addition with zero edits to any existing file,
- * while still guaranteeing each incident triggers at most one email.
- */
 @Entity
-@Table(name = "notification_log")
+@Table(name = "notification_log",
+        uniqueConstraints = @UniqueConstraint(name = "uk_notification_incident_channel",
+                columnNames = {"incident_id", "channel"}))
 @Data
 @Builder
 @NoArgsConstructor
@@ -25,9 +28,20 @@ public class NotificationLogEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "incident_id", nullable = false)
     private String incidentId;
 
+    @Column(nullable = false)
     private String channel;
-    private Instant notifiedAt;
+
+    @Column(nullable = false)
+    private String status;
+
+    @Column(nullable = false)
+    private Instant createdAt;
+
+    private Instant sentAt;
+
+    @Column(length = 2000)
+    private String errorMessage;
 }
